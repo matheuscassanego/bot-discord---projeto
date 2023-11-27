@@ -1,0 +1,354 @@
+# Imports de Bibliotecas
+import discord
+from discord.ext import commands
+import re
+import random
+
+# Intents para o bot poder funcionar
+intents = discord.Intents.all()
+client = commands.Bot(command_prefix='!', intents=intents)
+
+# Mensagem de Log On
+@client.event
+async def on_ready():
+    print(f'Bot está online como {client.user}')
+
+# ROLAGEM DE DADOS
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+
+    content = message.content
+
+    partes = content.split("#")
+    if len(partes) == 2:
+        num_rolagens = int(partes[0])
+        comando_rolagem = partes[1]
+    else:
+        num_rolagens = 1  # Define num_rolagens como 1 por padrão
+        comando_rolagem = content  # Assume o conteúdo como o comando de rolagem
+
+    print(f"Parte 1 (nº de rolagens): {num_rolagens}")
+
+    # Usa re.split() para dividir a parte 2 em uma lista de tokens
+    tokens = re.split(r'([\+\-\*/])', comando_rolagem)
+    # Remove espaços em branco dos tokens
+    tokens = [token.strip() for token in tokens if token.strip()]
+    
+    print(f"Parte 2 (comando de rolagem): {tokens}")
+
+    # Função para rolar dados com a sintaxe <nº de dados>d<nº do dado>
+    def roll_dice(dice_expr):
+        num, sides = map(int, dice_expr.split('d'))
+        return sum(random.randint(1, sides) for _ in range(num))
+
+    lista1 = tokens  # Lista original
+
+    # Verifique se há um comando de dados válido
+    has_valid_dice_command = any(re.match(r'\d+d\d+', token) for token in lista1)
+
+    if has_valid_dice_command:
+        # Laço de repetição para repetir o número de vezes igual a num_rolagens
+        lista3 = []
+        for _ in range(num_rolagens):
+            lista2 = lista1.copy()  # Cria uma cópia da lista1 para evitar substituir na lista original
+            # Substitui comandos de dados pelos resultados
+            for i in range(len(lista2)):
+                if re.match(r'\d+d\d+', lista2[i]):  # Verifica se é um comando de dado
+                    resultado_dado = roll_dice(lista2[i])
+                    lista2[i] = str(resultado_dado)
+                    
+            # Combina todos os elementos da lista2 em uma única string
+            expressao = ''.join(lista2)
+
+            # Armazene o resultado em lista3 como um inteiro
+            try:
+                resultado_final = eval(expressao)
+                lista3.append(int(resultado_final))
+            except Exception as e:
+                return
+
+            # Imprime a lista2 após a alteração
+            print(f"Lista 2 (após alteração): {lista2}")
+
+        # Combina os resultados em uma única string com cada resultado em uma linha
+        resultado_final_str = '\n'.join(map(str, lista3))
+
+        await message.channel.send(f"Resultados:\n{resultado_final_str}")
+    else:
+        # Se não houver comando de dados, trate-o como um comando
+        await client.process_commands(message)
+
+# EMBEDS E VIEW
+class PaginationView(discord.ui.View):
+    current_page: int = 1 # Página Atual
+
+    async def send(self, ctx): # Função para enviar o primeiro embed
+        self.message = await ctx.send(embed=self.embeds[0], view=self)
+
+    async def update_message(self): # Função para atualizar os embeds
+        self.update_buttons()
+        await self.message.edit(embed=self.embeds[self.current_page - 1], view=self)
+
+    def update_buttons(self): # Função para atualizar os botões ao trocar de embed
+        self.back_button.disabled = self.current_page == 1 # Desabilita o botão 'back' na página 1
+        self.next_button.disabled = self.current_page == len(self.embeds) # Desabilita o botão 'next' na última página
+
+        if self.current_page == 3: # Quando a página for a 3 adiciona o botão 4
+            self.add_item(self.goto_page_4_button)
+        else:
+            self.remove_item(self.goto_page_4_button)
+
+        if self.current_page == 4: # Quando a página for a 4 adiciona o botão 5
+            self.add_item(self.goto_page_5_button)
+        else:
+            self.remove_item(self.goto_page_5_button)
+
+    # Back Page Button
+    @discord.ui.button(label='<', style=discord.ButtonStyle.primary)
+    async def back_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page -= 1
+        await self.update_message()
+
+    # Next Page Button
+    @discord.ui.button(label='>', style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page += 1
+        await self.update_message()
+
+    # Page 1 Button
+    @discord.ui.button(label='Início', style=discord.ButtonStyle.primary)
+    async def goto_page_1_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page = 1  # Define a página atual como 1 (embed 0).
+        await self.update_message()
+
+    # Page 3 Button
+    @discord.ui.button(label='Atributos', style=discord.ButtonStyle.primary)
+    async def goto_page_3_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page = 3  # Define a página atual como 3 (embed 2).
+        await self.update_message()
+
+    # Page 4 Button
+    @discord.ui.button(label='Juventude', style=discord.ButtonStyle.green, emoji='🤙')
+    async def goto_page_4_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page = 5  # Define a página atual como 5 (embed 4).
+        await self.update_message()
+
+    # Page 5 Button
+    @discord.ui.button(label='Daniel', style=discord.ButtonStyle.red, emoji='🛹')
+    async def goto_page_5_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.current_page = 6  # Define a página atual como 6 (embed 5).
+        await self.update_message()
+
+@client.command()
+async def ordemparanormal(ctx): # Comando !ordemparanormal
+    
+    # Lista dos embeds com informações e configurações de cada página
+    embeds = [
+        discord.Embed(title='Bot para Ordem Paranormal RPG', description='Bot com informações sobre o sistema de rpg', color=discord.Color.brand_red()),
+        discord.Embed(title='Termos Importantes', description='', color=discord.Color.yellow()),
+        discord.Embed(title='Atributos', description='', color=discord.Color.blue()),
+        discord.Embed(title='Origens', description='', color=discord.Color.green()),
+        discord.Embed(title='PAGINA DE TESTE', description='Meu pau é maior que o teu', color=discord.Color.green()),
+        discord.Embed(title='PAGINA DE TESTE', description='Israel', color=discord.Color.purple()),
+    ]
+
+    ## Fields, Tumbnails and Images para cada Embed
+
+    # Página 1
+    embeds[0].add_field(name='O que é o Ordem:', value=
+        '''\n
+        Ordem paranormal RPG é um sistema de rpg (e uma série) criado pelo youtuber, streamer e desenvolvedor Cellbit junto com a jambo editora. O RPG é focado na investigação e combate contra o paranormal e as maneiras de como ele pode se manifestar na nossa realidade. Como quase todos os RPGs o Ordem não é diferente, nele um mestre cria um mundo, uma história e desafios que serão vivenciados pelos jogadores, que criam personagens para desbravar o paranormal.
+        ''', inline=False)
+    
+    embeds[0].add_field(name='', value= # Embed de espaçamento
+        '''\n
+        
+        ''', inline=False)
+    
+    embeds[0].add_field(name='O objetivo do Bot:', value=
+        '''\n
+        O bot existe para facilitar e simplificar tanto a busca por informações quanto o esclarecimento de mecâmicas.
+        ''', inline=False)
+    
+    embeds[0].add_field(name='', value= # Embed de espaçamento
+        '''\n
+        
+        ''', inline=False)
+    
+    embeds[0].add_field(name='O que tem no bot:', value=
+        '''\n
+         Termos Importantes
+         Atributos
+         Origens
+         Classes e trilhas
+         Perícias
+         Equipamento Geral e Modificações
+         Armaduras e Modificações
+         Armas e Modificações
+         Itens Amaldiçoados
+         Regras
+         O outro lado
+         VD e funcionamento de amaças
+         Poderes e Habilidades - Explicação
+         O Mestre
+        ''', inline=False)
+    
+    # Página 2
+
+    embeds[1].add_field(name='NEX:', value=
+        '''\n
+        NEX = Nível de Exposição Paranormal. A cada 5 de nex equivale a 1 nível e o nex máximo é o 99 que é o nível 20.
+        ''', inline=False)
+    
+    embeds[1].add_field(name='PV:', value=
+        '''\n
+        PV = Ponto de Vida.
+        ''', inline=False)
+    
+    embeds[1].add_field(name='PE:', value=
+        '''\n
+        PE = Ponto de Esforço. Serve para usar habilidades, rituais, itens, etc.
+        ''', inline=False)
+
+    # Página 3
+    embeds[2].add_field(name='O que são os atributos:\n', value=
+        '''\n
+        Definem carácterísticas físicas, mentais e interpessoais do personagem, afetam a rolagem de dados pois o valor de um atributo é a quantidade de dados rolados em certa perícia, e afeteam DTs.
+        Em algumas mesas de Ordem o valor do atributo pode ser levado em conta pelo mestre na hora de realizar uma ação.
+        ''', inline=False)
+    
+    embeds[2].add_field(name='', value= # Embed de espaçamento
+        '''\n
+        
+        ''', inline=False)
+    
+    embeds[2].add_field(name='Distribuição de atributos:\n', value=
+        '''\n
+        No NEX 5 os jogadores começãm com 1 ponto em cada atributo e tem 4 pontos para distribuir de forma que um atributo não passe de 3. Nos NEX 20, 50, 80, 95 o jogador ganha +1 ponto para distribuir em atributos, esse ponto pode levar algum atributo a mais de 3 com um limite de 5.
+        ''', inline=False)
+    
+    embeds[2].add_field(name='', value= # Embed de espaçamento
+        '''\n
+        
+        ''', inline=False)
+    
+    
+    embeds[2].add_field(name='Força - FOR:\n', value=
+        '''\n
+        É a força física, os músculos. Cada ponto de força é +5 espaçoes no inventário.
+        ''', inline=False)
+    
+    embeds[2].add_field(name='Agilidade - AGI:\n', value=
+        '''\n
+        É a destreza, a rapidez, as habilidades finas. Cada ponto de agilidade é +1 na defesa.
+        ''', inline=False)
+    
+    embeds[2].add_field(name='Vigor - VIG:\n', value=
+        '''\n
+        É a resitência. Cada ponto de vigor é +1 de vida por nex.
+        ''', inline=False)
+    
+    embeds[2].add_field(name='Presença - PRE:\n', value=
+        '''\n
+        É as habilidades interpessoais e sensoriais. Cada ponto de presença é +1 de PE por NEX.
+        ''', inline=False)
+    
+    embeds[2].add_field(name='Intelecto - INT:\n', value=
+        '''\n
+        É as habilidades acadêmicas, de estudo e lógica. Cada ponto de intelecto é +1 perícia.
+        ''', inline=False)
+    
+    # Página 4
+    embeds[3].add_field(name='O que é uma origem:\n', value=
+        '''\n
+        Basicamente uma origem é o que o personagem fazia (ou ainda faz) antes de entrar na ordem ou começar a história.
+        ''', inline=False)
+    
+    embeds[3].add_field(name='', value= # Embed de espaçamento
+        '''\n
+        
+        ''', inline=False)
+    
+    embeds[3].add_field(name='ORIGEM\n', value=
+        '''\n
+        DESCRIÇÃO DA ORIGEM
+        ''', inline=False)
+
+    # Página 5
+    embeds[4].add_field(name='João Pedro de Castro Pereira', value=
+        '''\n
+        - Juventude
+        ''', inline=False)
+    embeds[4].set_thumbnail(url="https://cdn.discordapp.com/attachments/1138164874720059423/1167134818312663040/EC_Juventude.png?ex=654d0601&is=653a9101&hm=2ab79d51cfc669ee4469695004e4f2fe34372f09f50222fe102f05c2dd0563bb&")
+    embeds[4].set_image(url="https://cdn.discordapp.com/attachments/1138164874720059423/1167135146277883934/juventude2B172Bb.png?ex=654d064f&is=653a914f&hm=2bb5e394a3bbd87bac9ab90e101cd6b1041551706152a4726e40029ed0ee11b0&")
+    
+    # Página 6
+    embeds[5].add_field(name='Daniel Mitinho Gama 3', value=
+        '''\n
+        - Mitinho da Gama 3 ganhou o GG CETEC 2023, nos nossos corações. 💜
+        ''', inline=False)
+    embeds[5].set_image(url="https://cdn.discordapp.com/attachments/1138164874720059423/1167156047782363207/20231026_144101.jpg?ex=654d19c6&is=653aa4c6&hm=f357672f632014bb980d9afae5c4d633920f04b6980a180e3eadce70db4277e7&")
+
+    # Envio dos Embeds
+    pagination = PaginationView()
+    pagination.embeds = embeds
+    await pagination.send(ctx)
+    await pagination.update_message()
+
+@client.command()
+async def ajuda(ctx): # Comando !ajuda
+    embed = discord.Embed(
+        title="Comandos do Bot",
+        description="Bot de Ordem Paranormal RPG",
+        color=discord.Color.dark_red()
+    )
+
+    embed.add_field(name='', value= # Embed de espaçamento
+        '''\n
+        ''', inline=False)
+    
+    embed.add_field(name='Rolagem de dados:', value=
+        '''\n
+        * <número de dados> d <valor do dado>
+            exemplo: 4d10\n
+        * <número de rolagens individuais> # <número de dados> d <valor do dado>
+            exemplo: 4#2d20\n
+        * É possível fazer operações matemáticas na rolagem de dados
+            exemplo: 4#2d20 + 15\n
+        ''', inline=False)
+    
+    embed.add_field(name='Comando de informações do sistema:', value=
+        '''\n
+        * !ordemparanormal\n
+        ''', inline=False)
+    
+    embed.add_field(name='AMONGUS:', value=
+        '''\n
+        * !sus\n
+        ''', inline=False)
+    
+    await ctx.send(embed=embed)
+
+@client.command()
+async def sus(ctx): # Comando !sus
+    embed = discord.Embed(
+        title="AMONGUS",
+        description="SUS",
+        color=discord.Color.red()
+    )
+
+    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1138164874720059423/1163536587842388039/latest.png?ex=653feee4&is=652d79e4&hm=47c87ba5099ab931b01e89cee2be87ab7379782d48dfb1c0d6f899b2a498b1a7&")
+    embed.set_image(url="https://cdn.discordapp.com/attachments/1138164874720059423/1163536587842388039/latest.png?ex=653feee4&is=652d79e4&hm=47c87ba5099ab931b01e89cee2be87ab7379782d48dfb1c0d6f899b2a498b1a7&")
+
+    await ctx.send(embed=embed)
+
+# Token do Bot
+client.run("TOKEN DO BOT (eu não posso colocar o meu se não da problema)")
